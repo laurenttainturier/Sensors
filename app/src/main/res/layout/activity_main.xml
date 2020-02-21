@@ -13,11 +13,27 @@
 
         <variable
             name="stopwatchSeconds"
-            type="Long"/>
+            type="Long" />
 
         <variable
             name="stopwatchMs"
-            type="Long"/>
+            type="Long" />
+
+        <variable
+            name="accelerometerData"
+            type="String" />
+
+        <variable
+            name="gyroscopeData"
+            type="String" />
+
+        <variable
+            name="pressureData"
+            type="String" />
+
+        <variable
+            name="magneticData"
+            type="String" />
     </data>
 
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -25,7 +41,7 @@
         android:layout_height="match_parent"
         tools:context=".MainActivity">
 
-        <TextView
+        <!--<TextView
             android:id="@+id/stopWatchSec_TextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -45,7 +61,7 @@
             android:text='@{stopwatchMs.toString()}'
             android:textSize="24sp"
             app:layout_constraintBaseline_toBaselineOf="@+id/stopWatchSec_TextView"
-            app:layout_constraintStart_toEndOf="@+id/stopWatchSec_TextView" />
+            app:layout_constraintStart_toEndOf="@+id/stopWatchSec_TextView" />-->
 
         <TextView
             android:id="@+id/textView"
@@ -67,7 +83,47 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintHorizontal_bias="0.498"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/stopWatchSec_TextView" />
+            app:layout_constraintTop_toBottomOf="@+id/pressure" />
+
+        <TextView
+            android:id="@+id/accelerometer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="64dp"
+            android:text="@{accelerometerData}"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/textView" />
+
+        <TextView
+            android:id="@+id/gyroscope"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text='@{gyroscopeData}'
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/accelerometer" />
+
+        <TextView
+            android:id="@+id/magnetic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@{magneticData}"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/gyroscope" />
+
+        <TextView
+            android:id="@+id/pressure"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@{pressureData}"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/magnetic" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>

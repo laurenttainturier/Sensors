@@ -14,13 +14,12 @@ import androidx.databinding.DataBindingUtil
 import com.example.sensors.databinding.ActivityMainBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.coroutines.CoroutineContext
+import kotlin.math.abs
 
 
 class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
@@ -37,9 +36,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
     private val lastTimeValues: MutableMap<String, Long> = mutableMapOf()
 
+    private val lastSensorValues: MutableMap<String, FloatArray?> = mutableMapOf()
+
     private var initialTime: Long = 0
 
-    private var startedTime: Long = 0
+    private val weight: Float = .153F
+
+    private lateinit var gravity: FloatArray
+
+    private lateinit var speed: List<Float>
+
+    private lateinit var displacement: List<Float>
 
     override val coroutineContext: CoroutineContext
         get() = Dispatchers.Main
@@ -56,24 +63,49 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         listenedSensors = listOf(
-            sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
             sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-            sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
+            sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY)/*,
+            sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
+            sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE),
+            sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)*/
         )
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (!binding.started) return
+        if (!binding.started || event == null) return
 
-        val sensorType = getSensorType(event?.sensor?.type)
+        val sensorType = getSensorType(event.sensor.type)
         val time = Calendar.getInstance().time.time - initialTime
+        if (event.sensor.type == Sensor.TYPE_GRAVITY)
+            gravity = event.values
 
         if (time != lastTimeValues[sensorType]) {
-            lastTimeValues[sensorType] = time
-            val newRow = event?.values?.joinToString(separator = ",", postfix = "\n") ?: ""
+            val dt = (time - (lastTimeValues[sensorType] ?: 0)).toFloat() / 1000
+            val alpha = 0.8F
+            val newSpeed = event.values.mapIndexed { i, value ->
+                val acc = value - gravity[i]
+                speed[i] + acc * dt / weight
+            }  // in m/s
+            val newDisplacement = newSpeed.mapIndexed { i, value ->
+                displacement[i] + value * dt
+            } // in m
+            val otherForces = event.values.mapIndexed { i, value -> value - gravity[i] }
+            binding.accelerometerData = event.values.joinToString()
+            binding.gyroscopeData = otherForces.joinToString()
+            binding.magneticData = speed.joinToString()
+            binding.pressureData = displacement.joinToString()
+            val data =
+                event.values + otherForces + newSpeed + newDisplacement
+
+            val newRow = data.joinToString(separator = ",", postfix = "\n")
+
             sensorValues[sensorType] += "$time,$newRow"
+            lastTimeValues[sensorType] = time
+            lastSensorValues[sensorType] = event.values
+            speed = newSpeed
+            displacement = newDisplacement
         }
     }
 
@@ -92,6 +124,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
             Sensor.TYPE_GYROSCOPE -> "gyroscope"
             Sensor.TYPE_PRESSURE -> "pressure"
             Sensor.TYPE_AMBIENT_TEMPERATURE -> "temperature"
+            Sensor.TYPE_MAGNETIC_FIELD -> "magnetic"
             else -> ""
         }
     }
@@ -99,7 +132,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
     fun startOrStop(view: View) {
         binding.started = !binding.started
         if (binding.started) {
-            launch {
+            /*launch {
                 startedTime = System.currentTimeMillis()
                 while (binding.started) {
                     val currentTime = System.currentTimeMillis() - startedTime
@@ -107,7 +140,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
                     binding.stopwatchMs = (currentTime % 1000) / 100
                     delay(100)
                 }
-            }
+            }*/
         } else {
             val directory = ContextCompat.getExternalFilesDirs(applicationContext, null)[0]
             val currentTime: String =
@@ -125,9 +158,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
     }
 
     private fun initRecord() {
+        speed = listOf(0F, 0F, 0F)
+        displacement = listOf(0F, 0F, 0F)
+        gravity = floatArrayOf(0F, 0F, 9.81F)
         listenedSensors.forEach { sensor ->
             if (sensor != null) {
-                sensorValues[getSensorType(sensor.type)] = ""
+                sensorValues[getSensorType(sensor.type)] =
+                    "time,ax,ay,az,gx,gy,gz,vx,vy,vz,dx,dy,dz\n"
                 initialTime = Calendar.getInstance().time.time
                 lastTimeValues[getSensorType(sensor.type)] = 0.toLong()
             }
