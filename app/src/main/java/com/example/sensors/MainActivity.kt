@@ -14,10 +14,9 @@ import androidx.databinding.DataBindingUtil
 import com.example.sensors.databinding.ActivityMainBinding
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.coroutines.CoroutineContext
@@ -39,7 +38,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
     private var initialTime: Long = 0
 
-    private var startedTime: Long = 0
+    private val sensors: Map<Int, String> = mapOf(
+        Sensor.TYPE_ACCELEROMETER to "accelerometer",
+        Sensor.TYPE_GYROSCOPE to "gyroscope",
+        Sensor.TYPE_PRESSURE to "pressure",
+        Sensor.TYPE_AMBIENT_TEMPERATURE to "temperature",
+        Sensor.TYPE_MAGNETIC_FIELD to "magnetic",
+        Sensor.TYPE_GRAVITY to "gravity"
+    )
+
+    private fun getSensorName(type: Int): String {
+        return sensors[type] ?: ""
+    }
 
     override val coroutineContext: CoroutineContext
         get() = Dispatchers.Main
@@ -49,31 +59,32 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
         binding = DataBindingUtil.setContentView(
             this, R.layout.activity_main
         )
-        binding.stopwatchSeconds = 0.toLong()
-        binding.stopwatchMs = 0.toLong()
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-        listenedSensors = listOf(
-            sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
-            sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-            sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)
-        )
+        listenedSensors = sensors.keys.map { key ->
+            sensorManager.getDefaultSensor(key)
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     override fun onSensorChanged(event: SensorEvent?) {
-        if (!binding.started) return
+        if (!binding.started || event == null) return
 
-        val sensorType = getSensorType(event?.sensor?.type)
+        val sensorType = getSensorName(event.sensor.type)
         val time = Calendar.getInstance().time.time - initialTime
 
         if (time != lastTimeValues[sensorType]) {
             lastTimeValues[sensorType] = time
-            val newRow = event?.values?.joinToString(separator = ",", postfix = "\n") ?: ""
-            sensorValues[sensorType] += "$time,$newRow"
+            val newRow = event.values
+                ?.map { it.toBigDecimal().setScale(4, RoundingMode.HALF_EVEN) }
+                ?.joinToString(separator = ";", postfix = "\n") ?: ""
+            sensorValues[sensorType] += "$time;$newRow"
+
+            if (event.sensor.type == Sensor.TYPE_ACCELEROMETER)
+                binding.accelerometer = newRow
         }
     }
 
@@ -86,29 +97,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
         }
     }
 
-    private fun getSensorType(number: Int?): String {
-        return when (number) {
-            Sensor.TYPE_ACCELEROMETER -> "accelerometer"
-            Sensor.TYPE_GYROSCOPE -> "gyroscope"
-            Sensor.TYPE_PRESSURE -> "pressure"
-            Sensor.TYPE_AMBIENT_TEMPERATURE -> "temperature"
-            else -> ""
-        }
-    }
-
     fun startOrStop(view: View) {
         binding.started = !binding.started
-        if (binding.started) {
-            launch {
-                startedTime = System.currentTimeMillis()
-                while (binding.started) {
-                    val currentTime = System.currentTimeMillis() - startedTime
-                    binding.stopwatchSeconds = currentTime / 1000
-                    binding.stopwatchMs = (currentTime % 1000) / 100
-                    delay(100)
-                }
-            }
-        } else {
+        if (!binding.started) {
             val directory = ContextCompat.getExternalFilesDirs(applicationContext, null)[0]
             val currentTime: String =
                 SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
@@ -127,9 +118,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
     private fun initRecord() {
         listenedSensors.forEach { sensor ->
             if (sensor != null) {
-                sensorValues[getSensorType(sensor.type)] = ""
+                val sensorType = getSensorName(sensor.type)
+                sensorValues[sensorType] = "time;x;y;z\n"
                 initialTime = Calendar.getInstance().time.time
-                lastTimeValues[getSensorType(sensor.type)] = 0.toLong()
+                lastTimeValues[sensorType] = 0.toLong()
             }
         }
     }
