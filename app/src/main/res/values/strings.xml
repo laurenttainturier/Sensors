@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Sensors</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="stop_recording">Press the button to stop recording</string>
+    <string name="start_recording">Press the button to start recording</string>
+</resources>
