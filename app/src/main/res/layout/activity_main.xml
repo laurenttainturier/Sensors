@@ -12,7 +12,7 @@
             type="boolean" />
 
         <variable
-            name="accelerometer"
+            name="time"
             type="String" />
 
     </data>
@@ -27,8 +27,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="64dp"
-            android:text='@{accelerometer != null ? `accelerometer: ` + accelerometer : `accelerometer: `}'
-            android:textSize="20sp"
+            android:text='@{time + "s"}'
+            android:textSize="30sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/textView" />

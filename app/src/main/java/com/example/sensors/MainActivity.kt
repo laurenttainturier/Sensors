@@ -32,7 +32,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
     private lateinit var binding: ActivityMainBinding
 
-    private var sensorValues: MutableMap<String, String> = mutableMapOf()
+    private var sensorValues: MutableMap<String, MutableMap<Long, List<Float>>> = mutableMapOf()
 
     private val lastTimeValues: MutableMap<String, Long> = mutableMapOf()
 
@@ -40,12 +40,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
     private val sensors: Map<Int, String> = mapOf(
         Sensor.TYPE_ACCELEROMETER to "accelerometer",
+        Sensor.TYPE_GRAVITY to "gravity"/*
         Sensor.TYPE_GYROSCOPE to "gyroscope",
         Sensor.TYPE_PRESSURE to "pressure",
         Sensor.TYPE_AMBIENT_TEMPERATURE to "temperature",
-        Sensor.TYPE_MAGNETIC_FIELD to "magnetic",
-        Sensor.TYPE_GRAVITY to "gravity"
+        Sensor.TYPE_MAGNETIC_FIELD to "magnetic"*/
     )
+
+    private var gravity = listOf<Float>()
+
+    private val separator = ";"
+
+    private val digitComma = ","
 
     private fun getSensorName(type: Int): String {
         return sensors[type] ?: ""
@@ -66,6 +72,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
         listenedSensors = sensors.keys.map { key ->
             sensorManager.getDefaultSensor(key)
         }
+
+        binding.time = "0"
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -73,18 +81,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
     override fun onSensorChanged(event: SensorEvent?) {
         if (!binding.started || event == null) return
 
-        val sensorType = getSensorName(event.sensor.type)
-        val time = Calendar.getInstance().time.time - initialTime
-
-        if (time != lastTimeValues[sensorType]) {
-            lastTimeValues[sensorType] = time
-            val newRow = event.values
-                ?.map { it.toBigDecimal().setScale(4, RoundingMode.HALF_EVEN) }
-                ?.joinToString(separator = ";", postfix = "\n") ?: ""
-            sensorValues[sensorType] += "$time;$newRow"
-
-            if (event.sensor.type == Sensor.TYPE_ACCELEROMETER)
-                binding.accelerometer = newRow
+        when (event.sensor.type) {
+            Sensor.TYPE_GRAVITY -> gravity = event.values.toList()
+            Sensor.TYPE_ACCELEROMETER -> {
+                val sensorType = getSensorName(event.sensor.type)
+                val time = Calendar.getInstance().time.time - initialTime
+                if (gravity.isNotEmpty())
+                    sensorValues[sensorType]?.set(time, event.values.mapIndexed { i, value ->
+                        value - gravity[i]
+                    })
+                binding.time = "%.2f".format(time.toFloat() / 1000)
+            }
         }
     }
 
@@ -100,14 +107,48 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
     fun startOrStop(view: View) {
         binding.started = !binding.started
         if (!binding.started) {
-            val directory = ContextCompat.getExternalFilesDirs(applicationContext, null)[0]
+            val directory = ContextCompat
+                .getExternalFilesDirs(applicationContext, null)[0]
             val currentTime: String =
-                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                SimpleDateFormat("yyyy-MM-dd HH-mm-ss", Locale.getDefault()).format(Date())
 
             sensorValues.forEach { (sensor, data) ->
                 val file = File(directory, "$currentTime - ${sensor}.csv")
                 FileOutputStream(file).use {
-                    it.write(data.toByteArray())
+                    // Header of a csv file
+                    it.write(
+                        "time,ax,ay,az,vx,vy,vz,x,y,z\n"
+                            .replace(",", separator)
+                            .toByteArray()
+                    )
+
+                    var previousTime = 0L
+                    val velocity: MutableMap<Long, List<Float>> = mutableMapOf()
+                    val displacement: MutableMap<Long, List<Float>> = mutableMapOf()
+
+                    data.forEach { (timestamp, values) ->
+                        val dt = timestamp - previousTime
+
+                        // Computes the velocity
+                        val newVelocity: List<Float> = values.mapIndexed { i, value ->
+                            (velocity[previousTime]?.get(i) ?: 0F) + value * dt / 1000
+                        }
+                        velocity[timestamp] = newVelocity
+
+                        // Computes the displacement
+                        val newDisplacement: List<Float> = newVelocity.mapIndexed { i, value ->
+                            (displacement[previousTime]?.get(i) ?: 0F) + value * dt / 1000
+                        }
+                        displacement[timestamp] = newDisplacement
+                        previousTime = timestamp
+
+                        // Transforms acceleration, velocity end displacement into a string
+                        val newRow = (values.toList() + newVelocity + newDisplacement)
+                            .map { it.toBigDecimal().setScale(4, RoundingMode.HALF_EVEN) }
+                            .joinToString(separator = separator, postfix = "\n")
+                            .replace(".", digitComma)
+                        it.write("$timestamp;$newRow".toByteArray())
+                    }
                 }
             }
         }
@@ -119,7 +160,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
         listenedSensors.forEach { sensor ->
             if (sensor != null) {
                 val sensorType = getSensorName(sensor.type)
-                sensorValues[sensorType] = "time;x;y;z\n"
+                sensorValues[sensorType] = mutableMapOf()
                 initialTime = Calendar.getInstance().time.time
                 lastTimeValues[sensorType] = 0.toLong()
             }
